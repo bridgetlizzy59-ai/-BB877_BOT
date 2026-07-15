@@ -268,185 +268,128 @@ async def about(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     query = update.callback_query
-
     await query.answer()
 
     data = query.data
 
-    logger.info("Button clicked: %s", data)
-
-    if data == "back":
-
-        return await start(update, context)
-
-    elif data == "help":
-
-        return await help_command(update, context)
-
-    elif data == "about":
-
-        return await about(update, context)
+    if data == "home":
+        await query.edit_message_text(
+            "🏠 BB877 Utility Bot",
+            reply_markup=main_menu(),
+        )
+        return ConversationHandler.END
 
     elif data == "fancy":
-
         await query.edit_message_text(
-            "Send the text you want to convert into Fancy Text.",
+            "Send the text you want to convert:",
             reply_markup=back_keyboard(),
         )
-
         return FANCY_TEXT
 
     elif data == "password":
-
         await query.edit_message_text(
-            "Send desired password length (Example: 16)",
+            "Enter password length (4-128):",
             reply_markup=back_keyboard(),
         )
-
         return PASSWORD_GEN
 
     elif data == "strength":
-
         await query.edit_message_text(
-            "Send a password to check its strength.",
+            "Send the password to check:",
             reply_markup=back_keyboard(),
         )
-
         return PASSWORD_STRENGTH
 
     elif data == "sha256":
-
         await query.edit_message_text(
-            "Send text to hash using SHA-256.",
+            "Send text to hash:",
             reply_markup=back_keyboard(),
         )
-
         return SHA256_HASH
 
-    elif data == "base64":
-
-        keyboard = InlineKeyboardMarkup(
-            [
-                [
-                    InlineKeyboardButton(
-                        "Encode",
-                        callback_data="b64_encode",
-                    ),
-                    InlineKeyboardButton(
-                        "Decode",
-                        callback_data="b64_decode",
-                    ),
-                ],
-                [
-                    InlineKeyboardButton(
-                        "⬅ Back",
-                        callback_data="back",
-                    )
-                ],
-            ]
-        )
-
+    elif data == "b64e":
         await query.edit_message_text(
-            "Choose Base64 operation.",
-            reply_markup=keyboard,
-        )
-
-    elif data == "b64_encode":
-
-        await query.edit_message_text(
-            "Send text to Base64 Encode.",
+            "Send text to Base64 encode:",
             reply_markup=back_keyboard(),
         )
-
         return BASE64_ENCODE
 
-    elif data == "b64_decode":
-
+    elif data == "b64d":
         await query.edit_message_text(
-            "Send Base64 text to Decode.",
+            "Send Base64 text to decode:",
             reply_markup=back_keyboard(),
         )
-
         return BASE64_DECODE
 
     elif data == "uuid":
-
-        return UUID_GEN
+        return await uuid_handler(update, context)
 
     elif data == "timestamp":
-
         await query.edit_message_text(
-            "Send Unix timestamp.",
+            "Send a Unix timestamp:",
             reply_markup=back_keyboard(),
         )
-
         return TIMESTAMP
 
     elif data == "upper":
-
         await query.edit_message_text(
-            "Send text.",
+            "Send text:",
             reply_markup=back_keyboard(),
         )
-
         return TO_UPPER
 
     elif data == "lower":
-
         await query.edit_message_text(
-            "Send text.",
+            "Send text:",
             reply_markup=back_keyboard(),
         )
-
         return TO_LOWER
 
     elif data == "reverse":
-
         await query.edit_message_text(
-            "Send text.",
+            "Send text:",
             reply_markup=back_keyboard(),
         )
-
         return REVERSE_TEXT
 
-    elif data == "word":
-
+    elif data == "words":
         await query.edit_message_text(
-            "Send text.",
+            "Send text:",
             reply_markup=back_keyboard(),
         )
-
         return WORD_COUNTER
 
     elif data == "random":
-
         await query.edit_message_text(
-            "Send two numbers.\n\nExample:\n1 100",
+            "Enter minimum and maximum.\nExample:\n1 100",
             reply_markup=back_keyboard(),
         )
-
         return RANDOM_NUMBER
 
     elif data == "coin":
-
-        return COIN_FLIP
+        return await coin_flip_handler(update, context)
 
     elif data == "dice":
-
-        return DICE
+        return await dice_handler(update, context)
 
     elif data == "emoji":
-
-        return RANDOM_EMOJI
+        return await random_emoji_handler(update, context)
 
     elif data == "quote":
+        return await random_quote_handler(update, context)
 
-        return RANDOM_QUOTE
+    elif data == "guess":
+        return await guess_game_start(update, context)
 
-  elif data == "guess":
+    elif data == "help":
+        await help_command(update, context)
+        return ConversationHandler.END
 
-    return await guess_game_start(update, context)
+    elif data == "about":
+        await about(update, context)
+        return ConversationHandler.END
 
+    return ConversationHandler.END
 # ==========================================================
 # PART 1 END
 # ==========================================================
