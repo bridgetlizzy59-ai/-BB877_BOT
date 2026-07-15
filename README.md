@@ -1,62 +1,51 @@
+````markdown
 # BB877 Utility Bot
 
-A multifunction Telegram utility bot built with:
-
-- Python 3.12
-- python-telegram-bot 21.10
-- Async architecture
-- Inline keyboard navigation
-- Railway deployment
+A production-ready Telegram Utility Bot built with **python-telegram-bot v21.10**.
 
 ## Features
 
-- Fancy Text (20+ Unicode styles)
+- Fancy Text (20+ Fonts)
 - Password Generator
 - Password Strength Checker
-- SHA-256
-- Base64 Encode
-- Base64 Decode
+- SHA-256 Hash
+- Base64 Encode/Decode
 - UUID Generator
-- Unix Timestamp Converter
+- Timestamp Converter
 - Uppercase
 - Lowercase
 - Reverse Text
 - Word Counter
-- Random Number Generator
+- Random Number
 - Coin Flip
 - Dice Roller
 - Random Emoji
 - Random Quote
 - Guess Number Game
+- Inline Keyboard Menu
+- Back Navigation
 - Help
 - About
+- Logging
+- Railway Ready
 
-## Railway Deployment
+## Deployment
 
-Create a Railway project.
+1. Fork or upload to GitHub.
+2. Create a Railway project.
+3. Connect the GitHub repository.
+4. Add the environment variable:
 
-Add environment variable:
-
-BOT_TOKEN
-
-Deploy.
-
-## Local
-
-```bash
-python -m venv .venv
-
-source .venv/bin/activate
+```
+BOT_TOKEN=YOUR_TOKEN
 ```
 
-Install:
+5. Deploy.
 
-```bash
-pip install -r requirements.txt
-```
+The bot will start automatically.
 
-Run:
+Built with:
 
-```bash
-python bot.py
-```
+- Python 3.12
+- python-telegram-bot 21.10
+````
