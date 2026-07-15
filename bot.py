@@ -1,12 +1,21 @@
+# ==========================================================
+# BB877 Utility Bot
+# Version 2.0
+# python-telegram-bot 21.10
+# ==========================================================
+
 import os
 import re
 import uuid
 import base64
 import hashlib
 import random
+import secrets
 import string
 import logging
+
 from datetime import datetime
+
 from dotenv import load_dotenv
 
 from telegram import (
@@ -15,13 +24,15 @@ from telegram import (
     InlineKeyboardMarkup,
 )
 
+from telegram.constants import ParseMode
+
 from telegram.ext import (
     Application,
     CommandHandler,
     CallbackQueryHandler,
     MessageHandler,
-    ContextTypes,
     ConversationHandler,
+    ContextTypes,
     filters,
 )
 
@@ -34,7 +45,9 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 if not BOT_TOKEN:
-    raise RuntimeError("BOT_TOKEN not found!")
+    raise RuntimeError(
+        "BOT_TOKEN environment variable not found."
+    )
 
 # ==========================================================
 # LOGGING
@@ -48,214 +61,474 @@ logging.basicConfig(
 logger = logging.getLogger("BB877")
 
 # ==========================================================
-# STATES
+# CONVERSATION STATES
 # ==========================================================
 
 (
     FANCY_TEXT,
-    PASSWORD_GEN,
+
+    PASSWORD_GENERATOR,
     PASSWORD_STRENGTH,
+
     SHA256_HASH,
     BASE64_ENCODE,
     BASE64_DECODE,
-    UUID_GEN,
+
     TIMESTAMP,
-    TO_UPPER,
-    TO_LOWER,
-    REVERSE_TEXT,
+
+    TEXT_UPPER,
+    TEXT_LOWER,
+    TEXT_REVERSE,
     WORD_COUNTER,
+
     RANDOM_NUMBER,
-    COIN_FLIP,
-    DICE,
-    RANDOM_EMOJI,
-    RANDOM_QUOTE,
-    GUESS_GAME,
-) = range(18)
+
+    GUESS_NUMBER,
+
+) = range(13)
 
 # ==========================================================
-# USER DATA
+# CONSTANTS
 # ==========================================================
 
-guess_numbers = {}
+PASSWORD_SYMBOLS = (
+    "!@#$%^&*()"
+    "_+-=[]{}"
+    "|;:,.<>?"
+)
+
+GAME_MIN = 1
+GAME_MAX = 100
+
+# ==========================================================
+# RANDOM DATA
+# ==========================================================
+
+EMOJIS = [
+
+    "😀",
+    "😁",
+    "😂",
+    "🤣",
+    "😎",
+    "🥳",
+    "🤖",
+    "🔥",
+    "⚡",
+    "🎉",
+    "🍀",
+    "🎯",
+    "💎",
+    "🚀",
+    "❤️",
+    "🌈",
+    "🐍",
+    "🎁",
+    "🏆",
+    "🍕",
+
+]
+
+QUOTES = [
+
+    "Believe in yourself.",
+
+    "Dream big.",
+
+    "Stay hungry. Stay foolish.",
+
+    "Success is earned.",
+
+    "Consistency beats motivation.",
+
+    "Everything is figureoutable.",
+
+    "Never stop learning.",
+
+    "Small progress is still progress.",
+
+    "Code. Learn. Repeat.",
+
+    "Discipline creates freedom.",
+
+]
+
+logger.info("BB877 Utility Bot initialized.")
 
 # ==========================================================
 # KEYBOARDS
 # ==========================================================
-
 
 def main_menu():
 
     keyboard = [
 
         [
-            InlineKeyboardButton("✨ Fancy Text", callback_data="fancy"),
-            InlineKeyboardButton("🔐 Password", callback_data="password"),
+            InlineKeyboardButton(
+                "✨ Fancy Text",
+                callback_data="fancy",
+            )
         ],
 
         [
-            InlineKeyboardButton("🛡 Strength", callback_data="strength"),
-            InlineKeyboardButton("🔑 SHA256", callback_data="sha256"),
+            InlineKeyboardButton(
+                "🔐 Password Tools",
+                callback_data="password",
+            )
         ],
 
         [
-            InlineKeyboardButton("📦 Base64", callback_data="base64"),
-            InlineKeyboardButton("🆔 UUID", callback_data="uuid"),
+            InlineKeyboardButton(
+                "🔒 Encoding & Hashing",
+                callback_data="encoding",
+            )
         ],
 
         [
-            InlineKeyboardButton("⏰ Timestamp", callback_data="timestamp"),
-            InlineKeyboardButton("🔠 Uppercase", callback_data="upper"),
+            InlineKeyboardButton(
+                "📝 Text Tools",
+                callback_data="text",
+            )
         ],
 
         [
-            InlineKeyboardButton("🔡 Lowercase", callback_data="lower"),
-            InlineKeyboardButton("🔄 Reverse", callback_data="reverse"),
+            InlineKeyboardButton(
+                "🎲 Random Tools",
+                callback_data="random",
+            )
         ],
 
         [
-            InlineKeyboardButton("📖 Word Count", callback_data="word"),
-            InlineKeyboardButton("🎲 Random", callback_data="random"),
+            InlineKeyboardButton(
+                "🎮 Guess Number",
+                callback_data="guess",
+            )
         ],
 
         [
-            InlineKeyboardButton("🪙 Coin", callback_data="coin"),
-            InlineKeyboardButton("🎲 Dice", callback_data="dice"),
-        ],
+            InlineKeyboardButton(
+                "❓ Help",
+                callback_data="help",
+            ),
 
-        [
-            InlineKeyboardButton("😀 Emoji", callback_data="emoji"),
-            InlineKeyboardButton("💬 Quote", callback_data="quote"),
+            InlineKeyboardButton(
+                "ℹ About",
+                callback_data="about",
+            ),
         ],
-
-        [
-            InlineKeyboardButton("🎮 Guess Game", callback_data="guess"),
-        ],
-
-        [
-            InlineKeyboardButton("ℹ Help", callback_data="help"),
-            InlineKeyboardButton("👤 About", callback_data="about"),
-        ]
 
     ]
 
     return InlineKeyboardMarkup(keyboard)
 
 
+# ==========================================================
+# BACK BUTTON
+# ==========================================================
+
 def back_keyboard():
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("⬅️ Back", callback_data="home")]
-    ])
+
+    return InlineKeyboardMarkup(
+
+        [
+            [
+                InlineKeyboardButton(
+                    "⬅ Back to Home",
+                    callback_data="home",
+                )
+            ]
+        ]
+
+    )
 
 # ==========================================================
 # START
 # ==========================================================
 
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = (
-        "👋 Welcome to *BB877 Utility Bot*\n\n"
-        "Choose any tool below."
+        "👋 *Welcome to BB877 Utility Bot*\n\n"
+        "A production-ready Telegram Utility Bot.\n\n"
+        "Choose a tool below."
     )
 
-    if update.message:
+    if update.callback_query:
 
-        await update.message.reply_text(
-            text,
-            parse_mode="Markdown",
+        await update.callback_query.edit_message_text(
+            text=text,
+            parse_mode=ParseMode.MARKDOWN,
             reply_markup=main_menu(),
         )
 
     else:
 
-        await update.callback_query.edit_message_text(
-            text,
-            parse_mode="Markdown",
+        await update.message.reply_text(
+            text=text,
+            parse_mode=ParseMode.MARKDOWN,
             reply_markup=main_menu(),
         )
+
+    return ConversationHandler.END
+
 
 # ==========================================================
 # HELP
 # ==========================================================
 
-
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    text = """
-📚 BB877 Utility Bot
+    text = (
+        "*BB877 Utility Bot Help*\n\n"
 
-Available Tools
+        "Available Tools:\n\n"
 
-✨ Fancy Text
-🔐 Password Generator
-🛡 Password Strength
-🔑 SHA256
-📦 Base64 Encode
-📦 Base64 Decode
-🆔 UUID Generator
-⏰ Timestamp
-🔠 Uppercase
-🔡 Lowercase
-🔄 Reverse Text
-📖 Word Counter
-🎲 Random Number
-🪙 Coin Flip
-🎲 Dice
-😀 Random Emoji
-💬 Random Quote
-🎮 Guess Number
+        "✨ Fancy Text\n"
+        "🔐 Password Generator\n"
+        "🛡 Password Strength Checker\n"
+        "🔒 SHA-256 Hash\n"
+        "📦 Base64 Encode\n"
+        "📂 Base64 Decode\n"
+        "🆔 UUID Generator\n"
+        "🕒 Timestamp Converter\n"
+        "🔠 Uppercase\n"
+        "🔡 Lowercase\n"
+        "↩ Reverse Text\n"
+        "📖 Word Counter\n"
+        "🎲 Random Number\n"
+        "🪙 Coin Flip\n"
+        "🎲 Dice\n"
+        "😀 Random Emoji\n"
+        "💬 Random Quote\n"
+        "🎮 Guess Number Game\n\n"
 
-Use the menu below.
-"""
+        "Use the buttons to navigate."
+    )
 
-    if update.message:
+    if update.callback_query:
 
-        await update.message.reply_text(
-            text,
+        await update.callback_query.edit_message_text(
+            text=text,
+            parse_mode=ParseMode.MARKDOWN,
             reply_markup=back_keyboard(),
         )
 
     else:
 
-        await update.callback_query.edit_message_text(
-            text,
+        await update.message.reply_text(
+            text=text,
+            parse_mode=ParseMode.MARKDOWN,
             reply_markup=back_keyboard(),
         )
+
+    return ConversationHandler.END
+
 
 # ==========================================================
 # ABOUT
 # ==========================================================
 
-
 async def about(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = (
-        "🤖 BB877 Utility Bot\n\n"
-        "Version : 1.0\n"
-        "Framework : python-telegram-bot 21.10\n"
-        "Deployment : Railway\n"
-        "Language : Python 3.12\n\n"
-        "Made for productivity."
+        "*BB877 Utility Bot*\n\n"
+
+        "Version: 2.0\n"
+
+        "Framework:\n"
+        "python-telegram-bot 21.10\n\n"
+
+        "Deployment:\n"
+        "Railway\n\n"
+
+        "Language:\n"
+        "Python 3.12"
     )
 
-    if update.message:
+    if update.callback_query:
 
-        await update.message.reply_text(
-            text,
+        await update.callback_query.edit_message_text(
+            text=text,
+            parse_mode=ParseMode.MARKDOWN,
             reply_markup=back_keyboard(),
         )
 
     else:
 
-        await update.callback_query.edit_message_text(
-            text,
+        await update.message.reply_text(
+            text=text,
+            parse_mode=ParseMode.MARKDOWN,
             reply_markup=back_keyboard(),
         )
+
+    return ConversationHandler.END
+
+# ==========================================================
+# MENU SCREENS
+# ==========================================================
+
+async def show_password_menu(query):
+
+    await query.edit_message_text(
+        text="🔐 *Password Tools*\n\nChoose an option.",
+        parse_mode=ParseMode.MARKDOWN,
+        reply_markup=InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton(
+                    "🔑 Generate Password",
+                    callback_data="password_generate",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "🛡 Password Strength",
+                    callback_data="password_strength",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "⬅ Back",
+                    callback_data="home",
+                )
+            ],
+        ]),
+    )
+
+
+async def show_encoding_menu(query):
+
+    await query.edit_message_text(
+        text="🔒 *Encoding & Hashing*",
+        parse_mode=ParseMode.MARKDOWN,
+        reply_markup=InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton(
+                    "SHA-256",
+                    callback_data="sha256",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "Base64 Encode",
+                    callback_data="b64_encode",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "Base64 Decode",
+                    callback_data="b64_decode",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "UUID Generator",
+                    callback_data="uuid",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "Timestamp",
+                    callback_data="timestamp",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "⬅ Back",
+                    callback_data="home",
+                )
+            ],
+        ]),
+    )
+
+
+async def show_text_menu(query):
+
+    await query.edit_message_text(
+        text="📝 *Text Tools*",
+        parse_mode=ParseMode.MARKDOWN,
+        reply_markup=InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton(
+                    "🔠 Uppercase",
+                    callback_data="upper",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "🔡 Lowercase",
+                    callback_data="lower",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "↩ Reverse Text",
+                    callback_data="reverse",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "📖 Word Counter",
+                    callback_data="words",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "⬅ Back",
+                    callback_data="home",
+                )
+            ],
+        ]),
+    )
+
+
+async def show_random_menu(query):
+
+    await query.edit_message_text(
+        text="🎲 *Random Tools*",
+        parse_mode=ParseMode.MARKDOWN,
+        reply_markup=InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton(
+                    "🎲 Random Number",
+                    callback_data="random_number",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "🪙 Coin Flip",
+                    callback_data="coin",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "🎲 Roll Dice",
+                    callback_data="dice",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "😀 Random Emoji",
+                    callback_data="emoji",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "💬 Random Quote",
+                    callback_data="quote",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "⬅ Back",
+                    callback_data="home",
+                )
+            ],
+        ]),
+    )
 
 # ==========================================================
 # CALLBACK ROUTER
 # ==========================================================
-
 
 async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -264,52 +537,64 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = query.data
 
-   if data == "home":
-    await query.edit_message_text(
-        "🏠 *BB877 Utility Bot*\n\nChoose a tool:",
-        parse_mode="Markdown",
-        reply_markup=main_menu(),
-    )
-    return ConversationHandler.END
+    # ---------------- HOME ----------------
 
-    elif data == "fancy":
-        await query.edit_message_text(
-            "Send the text you want to convert:",
-            reply_markup=back_keyboard(),
-        )
-        return FANCY_TEXT
+    if data == "home":
+        return await start(update, context)
+
+    # ---------------- HELP ----------------
+
+    elif data == "help":
+        return await help_command(update, context)
+
+    # ---------------- ABOUT ----------------
+
+    elif data == "about":
+        return await about(update, context)
+
+    # ---------------- PASSWORD MENU ----------------
 
     elif data == "password":
+        await show_password_menu(query)
+        return ConversationHandler.END
+
+    elif data == "password_generate":
         await query.edit_message_text(
-            "Enter password length (4-128):",
+            "🔑 Enter password length (4-128):",
             reply_markup=back_keyboard(),
         )
-        return PASSWORD_GEN
+        return PASSWORD_GENERATOR
 
-    elif data == "strength":
+    elif data == "password_strength":
         await query.edit_message_text(
-            "Send the password to check:",
+            "🛡 Send the password to check:",
             reply_markup=back_keyboard(),
         )
         return PASSWORD_STRENGTH
 
+    # ---------------- ENCODING MENU ----------------
+
+    elif data == "encoding":
+        await show_encoding_menu(query)
+        return ConversationHandler.END
+
     elif data == "sha256":
         await query.edit_message_text(
-            "Send text to hash:",
+            "🔒 Send text to hash:",
             reply_markup=back_keyboard(),
         )
         return SHA256_HASH
 
-    elif data == "b64e":
+    elif data == "b64_encode":
         await query.edit_message_text(
-            "Send text to Base64 encode:",
+            "📦 Send text to Base64 encode:",
             reply_markup=back_keyboard(),
         )
         return BASE64_ENCODE
 
-    elif data == "b64d":
+    elif data == "b64_decode":
         await query.edit_message_text(
-            "Send Base64 text to decode:",
+            "📦 Send Base64 text to decode:",
             reply_markup=back_keyboard(),
         )
         return BASE64_DECODE
@@ -319,42 +604,54 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif data == "timestamp":
         await query.edit_message_text(
-            "Send a Unix timestamp:",
+            "🕒 Send a Unix timestamp:",
             reply_markup=back_keyboard(),
         )
         return TIMESTAMP
 
+    # ---------------- TEXT MENU ----------------
+
+    elif data == "text":
+        await show_text_menu(query)
+        return ConversationHandler.END
+
     elif data == "upper":
         await query.edit_message_text(
-            "Send text:",
+            "🔠 Send text:",
             reply_markup=back_keyboard(),
         )
-        return TO_UPPER
+        return TEXT_UPPER
 
     elif data == "lower":
         await query.edit_message_text(
-            "Send text:",
+            "🔡 Send text:",
             reply_markup=back_keyboard(),
         )
-        return TO_LOWER
+        return TEXT_LOWER
 
     elif data == "reverse":
         await query.edit_message_text(
-            "Send text:",
+            "↩ Send text:",
             reply_markup=back_keyboard(),
         )
-        return REVERSE_TEXT
+        return TEXT_REVERSE
 
     elif data == "words":
         await query.edit_message_text(
-            "Send text:",
+            "📖 Send text:",
             reply_markup=back_keyboard(),
         )
         return WORD_COUNTER
 
+    # ---------------- RANDOM MENU ----------------
+
     elif data == "random":
+        await show_random_menu(query)
+        return ConversationHandler.END
+
+    elif data == "random_number":
         await query.edit_message_text(
-            "Enter minimum and maximum.\nExample:\n1 100",
+            "🎲 Send minimum and maximum.\n\nExample:\n1 100",
             reply_markup=back_keyboard(),
         )
         return RANDOM_NUMBER
@@ -371,181 +668,75 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "quote":
         return await random_quote_handler(update, context)
 
+    # ---------------- GUESS GAME ----------------
+
     elif data == "guess":
-        return await guess_game_start(update, context)
 
-    elif data == "help":
-        await help_command(update, context)
-        return ConversationHandler.END
+        context.user_data["guess_number"] = random.randint(
+            GAME_MIN,
+            GAME_MAX,
+        )
 
-    elif data == "about":
-        await about(update, context)
-        return ConversationHandler.END
+        context.user_data["attempts"] = 0
 
-    return ConversationHandler.END
-# ==========================================================
-# PART 1 END
-# ==========================================================
-# ==========================================================
-# FANCY TEXT (20+ FONTS)
-# ==========================================================
+        await query.edit_message_text(
+            f"🎮 I'm thinking of a number between {GAME_MIN} and {GAME_MAX}.\n\nSend your guess.",
+            reply_markup=back_keyboard(),
+        )
 
-FONTS = [
-    str.maketrans(
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789",
-        "𝘈𝘉𝘊𝘋𝘌𝘍𝘎𝘏𝘐𝘑𝘒𝘓𝘔𝘕𝘖𝘗𝘘𝘙𝘚𝘛𝘜𝘝𝘞𝘟𝘠𝘡𝘢𝘣𝘤𝘥𝘦𝘧𝘨𝘩𝘪𝘫𝘬𝘭𝘮𝘯𝘰𝘱𝘲𝘳𝘴𝘵𝘶𝘷𝘸𝘹𝘺𝘻0123456789"
-    ),
-    str.maketrans(
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789",
-        "𝑨𝑩𝑪𝑫𝑬𝑭𝑮𝑯𝑰𝑱𝑲𝑳𝑴𝑵𝑶𝑷𝑸𝑹𝑺𝑻𝑼𝑽𝑾𝑿𝒀𝒁𝒂𝒃𝒄𝒅𝒆𝒇𝒈𝒉𝒊𝒋𝒌𝒍𝒎𝒏𝒐𝒑𝒒𝒓𝒔𝒕𝒖𝒗𝒘𝒙𝒚𝒛0123456789"
-    ),
-]
+        return GUESS_NUMBER
 
-FONT_NAMES = [
-    "Italic",
-    "Bold Italic",
-]
+    # ---------------- FANCY TEXT ----------------
 
-UNICODE_STYLES = [
-    ("𝔸","𝔹","ℂ","𝔻","𝔼","𝔽","𝔾","ℍ","𝕀","𝕁","𝕂","𝕃","𝕄","ℕ","𝕆","ℙ","ℚ","ℝ","𝕊","𝕋","𝕌","𝕍","𝕎","𝕏","𝕐","ℤ"),
-    ("🄰","🄱","🄲","🄳","🄴","🄵","🄶","🄷","🄸","🄹","🄺","🄻","🄼","🄽","🄾","🄿","🅀","🅁","🅂","🅃","🅄","🅅","🅆","🅇","🅈","🅉"),
-]
-
-EMBELLISH = [
-    lambda t: "✨ " + t + " ✨",
-    lambda t: "🔥 " + t + " 🔥",
-    lambda t: "💎 " + t + " 💎",
-    lambda t: "❤️ " + t + " ❤️",
-    lambda t: "🌸 " + t + " 🌸",
-    lambda t: "⚡ " + t + " ⚡",
-    lambda t: "👑 " + t + " 👑",
-    lambda t: "🎀 " + t + " 🎀",
-    lambda t: "🦋 " + t + " 🦋",
-    lambda t: "🌟 " + t + " 🌟",
-]
-
-
-def bubble(text):
-    out = ""
-    for c in text.upper():
-        if "A" <= c <= "Z":
-            out += chr(0x1F150 + ord(c)-65)
-        else:
-            out += c
-    return out
-
-
-def double_struck(text):
-    normal="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
-    fancy="𝔸𝔹ℂ𝔻𝔼𝔽𝔾ℍ𝕀𝕁𝕂𝕃𝕄ℕ𝕆ℙℚℝ𝕊𝕋𝕌𝕍𝕎𝕏𝕐ℤ𝕒𝕓𝕔𝕕𝕖𝕗𝕘𝕙𝕚𝕛𝕜𝕝𝕞𝕟𝕠𝕡𝕢𝕣𝕤𝕥𝕦𝕧𝕨𝕩𝕪𝕫"
-    table=str.maketrans(normal,fancy)
-    return text.translate(table)
-
-
-def monospace(text):
-    normal="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
-    fancy="𝙰𝙱𝙲𝙳𝙴𝙵𝙶𝙷𝙸𝙹𝙺𝙻𝙼𝙽𝙾𝙿𝚀𝚁𝚂𝚃𝚄𝚅𝚆𝚇𝚈𝚉𝚊𝚋𝚌𝚍𝚎𝚏𝚐𝚑𝚒𝚓𝚔𝚕𝚖𝚗𝚘𝚙𝚚𝚛𝚜𝚝𝚞𝚟𝚠𝚡𝚢𝚣"
-    table=str.maketrans(normal,fancy)
-    return text.translate(table)
-
-
-def bold(text):
-    normal="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
-    fancy="𝗔𝗕𝗖𝗗𝗘𝗙𝗚𝗛𝗜𝗝𝗞𝗟𝗠𝗡𝗢𝗣𝗤𝗥𝗦𝗧𝗨𝗩𝗪𝗫𝗬𝗭𝗮𝗯𝗰𝗱𝗲𝗳𝗴𝗵𝗶𝗷𝗸𝗹𝗺𝗻𝗼𝗽𝗾𝗿𝘀𝘁𝘂𝘃𝘄𝘅𝘆𝘇"
-    table=str.maketrans(normal,fancy)
-    return text.translate(table)
-
-
-def italic(text):
-    normal="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
-    fancy="𝘈𝘉𝘊𝘋𝘌𝘍𝘎𝘏𝘐𝘑𝘒𝘓𝘔𝘕𝘖𝘗𝘘𝘙𝘚𝘛𝘜𝘝𝘞𝘟𝘠𝘡𝘢𝘣𝘤𝘥𝘦𝘧𝘨𝘩𝘪𝘫𝘬𝘭𝘮𝘯𝘰𝘱𝘲𝘳𝘴𝘵𝘶𝘷𝘸𝘹𝘺𝘻"
-    table=str.maketrans(normal,fancy)
-    return text.translate(table)
-
-
-async def fancy_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    text = update.message.text
-
-    results = []
-
-    results.append(f"**Original**\n{text}\n")
-
-    results.append(f"**Bold**\n{bold(text)}")
-    results.append(f"**Italic**\n{italic(text)}")
-    results.append(f"**Double Struck**\n{double_struck(text)}")
-    results.append(f"**Monospace**\n{monospace(text)}")
-    results.append(f"**Bubble**\n{bubble(text)}")
-
-    for i, func in enumerate(EMBELLISH, start=1):
-        results.append(f"**Style {i}**\n{func(text)}")
-
-    results.append(f"`{text}`")
-    results.append(f"||{text}||")
-    results.append(text.upper())
-    results.append(text.lower())
-    results.append(" ".join(text))
-    results.append("•".join(text))
-    results.append("-".join(text))
-    results.append("_".join(text))
-    results.append("★ " + text + " ★")
-    results.append("✿ " + text + " ✿")
-    results.append("➜ " + text)
-    results.append("☞ " + text)
-    results.append("❖ " + text)
-
-    await update.message.reply_text(
-        "\n\n".join(results),
-        reply_markup=back_keyboard(),
-    )
+    elif data == "fancy":
+        await query.edit_message_text(
+            "✨ Send the text you want to convert:",
+            reply_markup=back_keyboard(),
+        )
+        return FANCY_TEXT
 
     return ConversationHandler.END
-    # ==========================================================
+
+# ==========================================================
 # PASSWORD GENERATOR
 # ==========================================================
 
-SPECIAL_CHARACTERS = "!@#$%^&*()_+-=[]{}|;:,.<>?/"
-
-async def password_generator_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def password_generator(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = update.message.text.strip()
 
-    try:
-        length = int(text)
-    except ValueError:
+    if not text.isdigit():
+
         await update.message.reply_text(
-            "❌ Please send a valid number.\nExample: 16",
+            "❌ Please enter a number between 4 and 128.",
             reply_markup=back_keyboard(),
         )
-        return PASSWORD_GEN
+        return PASSWORD_GENERATOR
+
+    length = int(text)
 
     if length < 4 or length > 128:
+
         await update.message.reply_text(
-            "⚠️ Password length must be between 4 and 128.",
+            "❌ Password length must be between 4 and 128.",
             reply_markup=back_keyboard(),
         )
-        return PASSWORD_GEN
+        return PASSWORD_GENERATOR
 
     chars = (
         string.ascii_letters
         + string.digits
-        + SPECIAL_CHARACTERS
+        + PASSWORD_SYMBOLS
     )
 
-    while True:
-        password = "".join(random.choice(chars) for _ in range(length))
-
-        if (
-            any(c.islower() for c in password)
-            and any(c.isupper() for c in password)
-            and any(c.isdigit() for c in password)
-            and any(c in SPECIAL_CHARACTERS for c in password)
-        ):
-            break
+    password = "".join(
+        secrets.choice(chars)
+        for _ in range(length)
+    )
 
     await update.message.reply_text(
-        f"🔐 Generated Password\n\n`{password}`",
-        parse_mode="Markdown",
+        f"🔑 *Generated Password*\n\n`{password}`",
+        parse_mode=ParseMode.MARKDOWN,
         reply_markup=back_keyboard(),
     )
 
@@ -553,102 +744,73 @@ async def password_generator_handler(update: Update, context: ContextTypes.DEFAU
 
 
 # ==========================================================
-# PASSWORD STRENGTH CHECKER
+# PASSWORD STRENGTH
 # ==========================================================
 
-def calculate_password_strength(password: str):
+async def password_strength(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    password = update.message.text
 
     score = 0
-    feedback = []
 
     if len(password) >= 8:
-        score += 1
-    else:
-        feedback.append("Use at least 8 characters.")
-
-    if len(password) >= 12:
         score += 1
 
     if re.search(r"[A-Z]", password):
         score += 1
-    else:
-        feedback.append("Add uppercase letters.")
 
     if re.search(r"[a-z]", password):
         score += 1
-    else:
-        feedback.append("Add lowercase letters.")
 
     if re.search(r"\d", password):
         score += 1
-    else:
-        feedback.append("Add numbers.")
 
-    if re.search(r"[!@#$%^&*()_+\-=\[\]{}|;:,.<>?/]", password):
+    if re.search(rf"[{re.escape(PASSWORD_SYMBOLS)}]", password):
         score += 1
-    else:
-        feedback.append("Add special characters.")
 
-    if score <= 2:
-        level = "🔴 Weak"
+    if score <= 1:
+        strength = "🔴 Very Weak"
 
-    elif score <= 4:
-        level = "🟡 Medium"
+    elif score == 2:
+        strength = "🟠 Weak"
 
-    else:
-        level = "🟢 Strong"
+    elif score == 3:
+        strength = "🟡 Medium"
 
-    return level, score, feedback
-
-
-async def password_strength_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    password = update.message.text
-
-    level, score, feedback = calculate_password_strength(password)
-
-    msg = (
-        "🛡 Password Strength Report\n\n"
-        f"Strength : {level}\n"
-        f"Score : {score}/6\n"
-        f"Length : {len(password)}"
-    )
-
-    if feedback:
-        msg += "\n\nSuggestions:\n"
-
-        for item in feedback:
-            msg += f"• {item}\n"
+    elif score == 4:
+        strength = "🟢 Strong"
 
     else:
-        msg += "\n\n✅ Excellent password."
+        strength = "💪 Very Strong"
 
     await update.message.reply_text(
-        msg,
+        f"🛡 *Password Strength*\n\n{strength}",
+        parse_mode=ParseMode.MARKDOWN,
         reply_markup=back_keyboard(),
     )
 
     return ConversationHandler.END
-    # ==========================================================
-# SHA-256 HASH
+
+
+# ==========================================================
+# SHA-256
 # ==========================================================
 
 async def sha256_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    text = update.message.text
-
-    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    digest = hashlib.sha256(
+        update.message.text.encode("utf-8")
+    ).hexdigest()
 
     await update.message.reply_text(
-        f"🔑 SHA-256 Hash\n\n`{digest}`",
-        parse_mode="Markdown",
+        f"🔒 *SHA-256*\n\n`{digest}`",
+        parse_mode=ParseMode.MARKDOWN,
         reply_markup=back_keyboard(),
     )
 
     return ConversationHandler.END
 
-
-# ==========================================================
+    # ==========================================================
 # BASE64 ENCODE
 # ==========================================================
 
@@ -661,8 +823,8 @@ async def base64_encode_handler(update: Update, context: ContextTypes.DEFAULT_TY
     ).decode("utf-8")
 
     await update.message.reply_text(
-        f"📦 Base64 Encoded\n\n`{encoded}`",
-        parse_mode="Markdown",
+        f"📦 *Base64 Encoded*\n\n`{encoded}`",
+        parse_mode=ParseMode.MARKDOWN,
         reply_markup=back_keyboard(),
     )
 
@@ -675,59 +837,41 @@ async def base64_encode_handler(update: Update, context: ContextTypes.DEFAULT_TY
 
 async def base64_decode_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    text = update.message.text.strip()
-
     try:
 
         decoded = base64.b64decode(
-            text.encode("utf-8"),
-            validate=True
+            update.message.text
         ).decode("utf-8")
 
-    except UnicodeDecodeError:
-
         await update.message.reply_text(
-            "❌ The Base64 string is valid but does not contain UTF-8 text.",
+            f"📂 *Decoded Text*\n\n{decoded}",
+            parse_mode=ParseMode.MARKDOWN,
             reply_markup=back_keyboard(),
         )
-
-        return BASE64_DECODE
 
     except Exception:
 
         await update.message.reply_text(
-            "❌ Invalid Base64 input.",
+            "❌ Invalid Base64 text.",
             reply_markup=back_keyboard(),
         )
 
-        return BASE64_DECODE
-
-    await update.message.reply_text(
-        f"📦 Base64 Decoded\n\n{decoded}",
-        reply_markup=back_keyboard(),
-    )
-
     return ConversationHandler.END
-    # ==========================================================
+
+
+# ==========================================================
 # UUID GENERATOR
 # ==========================================================
 
 async def uuid_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    uid = str(uuid.uuid4())
+    new_uuid = str(uuid.uuid4())
 
-    if update.callback_query:
-        await update.callback_query.edit_message_text(
-            f"🆔 UUID v4\n\n`{uid}`",
-            parse_mode="Markdown",
-            reply_markup=back_keyboard(),
-        )
-    else:
-        await update.message.reply_text(
-            f"🆔 UUID v4\n\n`{uid}`",
-            parse_mode="Markdown",
-            reply_markup=back_keyboard(),
-        )
+    await update.callback_query.edit_message_text(
+        f"🆔 *UUID v4*\n\n`{new_uuid}`",
+        parse_mode=ParseMode.MARKDOWN,
+        reply_markup=back_keyboard(),
+    )
 
     return ConversationHandler.END
 
@@ -738,32 +882,26 @@ async def uuid_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def timestamp_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    text = update.message.text.strip()
-
     try:
-        ts = int(text)
+
+        ts = int(update.message.text)
 
         dt = datetime.fromtimestamp(ts)
 
-        result = (
-            "⏰ Timestamp Result\n\n"
-            f"Unix : {ts}\n"
-            f"Date : {dt.strftime('%Y-%m-%d')}\n"
-            f"Time : {dt.strftime('%H:%M:%S')}\n"
-            f"ISO : {dt.isoformat()}"
+        await update.message.reply_text(
+            f"🕒 *Date & Time*\n\n`{dt}`",
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=back_keyboard(),
         )
 
-    except Exception:
+    except ValueError:
 
-        result = "❌ Invalid Unix Timestamp."
-
-    await update.message.reply_text(
-        result,
-        reply_markup=back_keyboard(),
-    )
+        await update.message.reply_text(
+            "❌ Invalid Unix timestamp.",
+            reply_markup=back_keyboard(),
+        )
 
     return ConversationHandler.END
-
 
 # ==========================================================
 # UPPERCASE
@@ -771,8 +909,10 @@ async def timestamp_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def uppercase_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
+    text = update.message.text
+
     await update.message.reply_text(
-        update.message.text.upper(),
+        text.upper(),
         reply_markup=back_keyboard(),
     )
 
@@ -785,8 +925,10 @@ async def uppercase_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def lowercase_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
+    text = update.message.text
+
     await update.message.reply_text(
-        update.message.text.lower(),
+        text.lower(),
         reply_markup=back_keyboard(),
     )
 
@@ -797,12 +939,12 @@ async def lowercase_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # REVERSE TEXT
 # ==========================================================
 
-async def reverse_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def reverse_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    text = update.message.text[::-1]
+    text = update.message.text
 
     await update.message.reply_text(
-        text,
+        text[::-1],
         reply_markup=back_keyboard(),
     )
 
@@ -815,57 +957,127 @@ async def reverse_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def word_counter_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    text = update.message.text
+    text = update.message.text.strip()
 
     words = len(text.split())
 
     chars = len(text)
 
-    chars_no_space = len(text.replace(" ", ""))
-
     lines = len(text.splitlines())
 
     result = (
-        "📖 Text Statistics\n\n"
-        f"Words : {words}\n"
-        f"Characters : {chars}\n"
-        f"Characters (No Spaces) : {chars_no_space}\n"
-        f"Lines : {lines}"
+        "📖 *Word Counter*\n\n"
+        f"Words : `{words}`\n"
+        f"Characters : `{chars}`\n"
+        f"Lines : `{lines}`"
     )
 
     await update.message.reply_text(
         result,
+        parse_mode=ParseMode.MARKDOWN,
         reply_markup=back_keyboard(),
     )
 
     return ConversationHandler.END
-    # ==========================================================
-# RANDOM TOOLS
+
+# ==========================================================
+# FANCY TEXT FONTS
 # ==========================================================
 
-EMOJIS = [
-    "😀","😎","🥳","😂","😍","🤖","🔥","⚡","🎉","💎",
-    "🚀","🌟","🍀","🎯","❤️","💯","😇","😈","😺","🦄",
-    "🍕","☕","🌈","🎵","📚","💡","🧠","🎁","🏆","🐍"
-]
+NORMAL = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+FONTS = {
 
-QUOTES = [
-    "Believe in yourself.",
-    "Stay hungry. Stay foolish.",
-    "Never stop learning.",
-    "Dream big. Work hard.",
-    "Success is earned, not given.",
-    "Discipline beats motivation.",
-    "One step at a time.",
-    "Small progress is still progress.",
-    "Great things take time.",
-    "Be better than yesterday.",
-    "Code. Learn. Repeat.",
-    "Focus on solutions.",
-    "Consistency creates results.",
-    "Everything is figureoutable.",
-    "The best time to start is now."
-]
+"𝗕𝗼𝗹𝗱":
+"𝗔𝗕𝗖𝗗𝗘𝗙𝗚𝗛𝗜𝗝𝗞𝗟𝗠𝗡𝗢𝗣𝗤𝗥𝗦𝗧𝗨𝗩𝗪𝗫𝗬𝗭"
+"𝗮𝗯𝗰𝗱𝗲𝗳𝗴𝗵𝗶𝗷𝗸𝗹𝗺𝗻𝗼𝗽𝗾𝗿𝘀𝘁𝘂𝘃𝘄𝘅𝘆𝘇",
+
+"𝘐𝘵𝘢𝘭𝘪𝘤":
+"𝘈𝘉𝘊𝘋𝘌𝘍𝘎𝘏𝘐𝘑𝘒𝘓𝘔𝘕𝘖𝘗𝘘𝘙𝘚𝘛𝘜𝘝𝘞𝘟𝘠𝘡"
+"𝘢𝘣𝘤𝘥𝘦𝘧𝘨𝘩𝘪𝘫𝘬𝘭𝘮𝘯𝘰𝘱𝘲𝘳𝘴𝘵𝘶𝘷𝘸𝘹𝘺𝘻",
+
+"𝘽𝙤𝙡𝙙 𝙄𝙩𝙖𝙡𝙞𝙘":
+"𝘼𝘽𝘾𝘿𝙀𝙁𝙂𝙃𝙄𝙅𝙆𝙇𝙈𝙉𝙊𝙋𝙌𝙍𝙎𝙏𝙐𝙑𝙒𝙓𝙔𝙕"
+"𝙖𝙗𝙘𝙙𝙚𝙛𝙜𝙝𝙞𝙟𝙠𝙡𝙢𝙣𝙤𝙥𝙦𝙧𝙨𝙩𝙪𝙫𝙬𝙭𝙮𝙯",
+
+"𝙼𝚘𝚗𝚘":
+"𝙰𝙱𝙲𝙳𝙴𝙵𝙶𝙷𝙸𝙹𝙺𝙻𝙼𝙽𝙾𝙿𝚀𝚁𝚂𝚃𝚄𝚅𝚆𝚇𝚈𝚉"
+"𝚊𝚋𝚌𝚍𝚎𝚏𝚐𝚑𝚒𝚓𝚔𝚕𝚖𝚗𝚘𝚙𝚚𝚛𝚜𝚝𝚞𝚟𝚠𝚡𝚢𝚣",
+
+"𝔻𝕠𝕦𝕓𝕝𝕖":
+"𝔸𝔹ℂ𝔻𝔼𝔽𝔾ℍ𝕀𝕁𝕂𝕃𝕄ℕ𝕆ℙℚℝ𝕊𝕋𝕌𝕍𝕎𝕏𝕐ℤ"
+"𝕒𝕓𝕔𝕕𝕖𝕗𝕘𝕙𝕚𝕛𝕜𝕝𝕞𝕟𝕠𝕡𝕢𝕣𝕤𝕥𝕦𝕧𝕨𝕩𝕪𝕫",
+
+}
+
+# ==========================================================
+# FANCY TEXT ENGINE
+# ==========================================================
+
+def convert_font(text: str, alphabet: str):
+
+    result = ""
+
+    for letter in text:
+
+        index = NORMAL.find(letter)
+
+        if index == -1:
+            result += letter
+
+        else:
+            result += alphabet[index]
+
+    return result
+
+
+# ==========================================================
+# FANCY TEXT HANDLER
+# ==========================================================
+
+async def fancy_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    text = update.message.text
+
+    results = []
+
+    for font_name, alphabet in FONTS.items():
+
+        try:
+
+            converted = convert_font(
+                text,
+                alphabet,
+            )
+
+            results.append(
+                f"*{font_name}*\n`{converted}`"
+            )
+
+        except Exception:
+
+            continue
+
+    if not results:
+
+        await update.message.reply_text(
+            "❌ Unable to convert text.",
+            reply_markup=back_keyboard(),
+        )
+
+        return ConversationHandler.END
+
+    message = "\n\n".join(results)
+
+    if len(message) > 4000:
+        message = message[:3900] + "\n\n..."
+
+    await update.message.reply_text(
+        message,
+        parse_mode=ParseMode.MARKDOWN,
+        reply_markup=back_keyboard(),
+    )
+
+    return ConversationHandler.END
 
 # ==========================================================
 # RANDOM NUMBER
@@ -873,11 +1085,15 @@ QUOTES = [
 
 async def random_number_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    text = update.message.text.strip()
-
     try:
 
-        minimum, maximum = map(int, text.split())
+        parts = update.message.text.split()
+
+        if len(parts) != 2:
+            raise ValueError
+
+        minimum = int(parts[0])
+        maximum = int(parts[1])
 
         if minimum > maximum:
             minimum, maximum = maximum, minimum
@@ -885,8 +1101,8 @@ async def random_number_handler(update: Update, context: ContextTypes.DEFAULT_TY
         number = random.randint(minimum, maximum)
 
         await update.message.reply_text(
-            f"🎲 Random Number\n\nRange : {minimum} - {maximum}\nResult : **{number}**",
-            parse_mode="Markdown",
+            f"🎲 Random Number\n\n**{number}**",
+            parse_mode=ParseMode.MARKDOWN,
             reply_markup=back_keyboard(),
         )
 
@@ -910,55 +1126,28 @@ async def coin_flip_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     result = random.choice(["🪙 Heads", "🪙 Tails"])
 
-    if update.callback_query:
-
-        await update.callback_query.edit_message_text(
-            f"{result}",
-            reply_markup=back_keyboard(),
-        )
-
-    else:
-
-        await update.message.reply_text(
-            result,
-            reply_markup=back_keyboard(),
-        )
+    await update.callback_query.edit_message_text(
+        f"*Coin Flip*\n\n{result}",
+        parse_mode=ParseMode.MARKDOWN,
+        reply_markup=back_keyboard(),
+    )
 
     return ConversationHandler.END
 
 
 # ==========================================================
-# DICE ROLL
+# DICE
 # ==========================================================
 
 async def dice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     value = random.randint(1, 6)
 
-    dice_faces = {
-        1: "⚀",
-        2: "⚁",
-        3: "⚂",
-        4: "⚃",
-        5: "⚄",
-        6: "⚅",
-    }
-
-    message = f"🎲 Dice Roll\n\n{dice_faces[value]}\n\nResult : {value}"
-
-    if update.callback_query:
-
-        await update.callback_query.edit_message_text(
-            message,
-            reply_markup=back_keyboard(),
-        )
-
-    else:
-
-        await update.message.reply_text(
-            message,
-            reply_markup=back_keyboard(),
-        )
+    await update.callback_query.edit_message_text(
+        f"🎲 Dice Roll\n\n**{value}**",
+        parse_mode=ParseMode.MARKDOWN,
+        reply_markup=back_keyboard(),
+    )
 
     return ConversationHandler.END
 
@@ -971,19 +1160,10 @@ async def random_emoji_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
     emoji = random.choice(EMOJIS)
 
-    if update.callback_query:
-
-        await update.callback_query.edit_message_text(
-            f"😀 Random Emoji\n\n{emoji}",
-            reply_markup=back_keyboard(),
-        )
-
-    else:
-
-        await update.message.reply_text(
-            f"😀 {emoji}",
-            reply_markup=back_keyboard(),
-        )
+    await update.callback_query.edit_message_text(
+        f"😀 Random Emoji\n\n{emoji}",
+        reply_markup=back_keyboard(),
+    )
 
     return ConversationHandler.END
 
@@ -996,79 +1176,20 @@ async def random_quote_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
     quote = random.choice(QUOTES)
 
-    if update.callback_query:
-
-        await update.callback_query.edit_message_text(
-            f"💬 Quote\n\n_{quote}_",
-            parse_mode="Markdown",
-            reply_markup=back_keyboard(),
-        )
-
-    else:
-
-        await update.message.reply_text(
-            f"💬 {quote}",
-            reply_markup=back_keyboard(),
-        )
+    await update.callback_query.edit_message_text(
+        f"💬 Quote\n\n_{quote}_",
+        parse_mode=ParseMode.MARKDOWN,
+        reply_markup=back_keyboard(),
+    )
 
     return ConversationHandler.END
-    # ==========================================================
+
+
+# ==========================================================
 # GUESS NUMBER GAME
 # ==========================================================
 
-GAME_MIN = 1
-GAME_MAX = 100
-GAME_MAX_ATTEMPTS = 10
-
-
-async def guess_game_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    user_id = update.effective_user.id
-
-    secret = random.randint(GAME_MIN, GAME_MAX)
-
-    guess_numbers[user_id] = {
-        "number": secret,
-        "attempts": 0,
-    }
-
-    message = (
-        "🎮 Guess Number Game\n\n"
-        f"I'm thinking of a number between {GAME_MIN} and {GAME_MAX}.\n\n"
-        "Send your first guess!"
-    )
-
-    if update.callback_query:
-
-        await update.callback_query.edit_message_text(
-            message,
-            reply_markup=back_keyboard(),
-        )
-
-    else:
-
-        await update.message.reply_text(
-            message,
-            reply_markup=back_keyboard(),
-        )
-
-    return GUESS_GAME
-
-
-async def guess_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    user_id = update.effective_user.id
-
-    if user_id not in guess_numbers:
-
-        await update.message.reply_text(
-            "Start a new game from the menu.",
-            reply_markup=back_keyboard(),
-        )
-
-        return ConversationHandler.END
-
-    game = guess_numbers[user_id]
+async def guess_number_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
 
@@ -1077,262 +1198,45 @@ async def guess_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     except ValueError:
 
         await update.message.reply_text(
-            "❌ Send numbers only.",
+            "❌ Enter a valid number.",
             reply_markup=back_keyboard(),
         )
 
-        return GUESS_GAME
+        return GUESS_NUMBER
 
-    if guess < GAME_MIN or guess > GAME_MAX:
+    target = context.user_data.get("guess_number")
 
-        await update.message.reply_text(
-            f"Enter a number between {GAME_MIN} and {GAME_MAX}.",
-            reply_markup=back_keyboard(),
-        )
+    attempts = context.user_data.get("attempts", 0) + 1
 
-        return GUESS_GAME
-
-    game["attempts"] += 1
-
-    target = game["number"]
-
-    if guess == target:
-
-        attempts = game["attempts"]
-
-        del guess_numbers[user_id]
-
-        await update.message.reply_text(
-            f"🎉 Correct!\n\n"
-            f"Number: {target}\n"
-            f"Attempts: {attempts}",
-            reply_markup=back_keyboard(),
-        )
-
-        return ConversationHandler.END
-
-    remaining = GAME_MAX_ATTEMPTS - game["attempts"]
-
-    if remaining <= 0:
-
-        answer = game["number"]
-
-        del guess_numbers[user_id]
-
-        await update.message.reply_text(
-            f"💀 Game Over!\n\n"
-            f"The correct number was {answer}.",
-            reply_markup=back_keyboard(),
-        )
-
-        return ConversationHandler.END
+    context.user_data["attempts"] = attempts
 
     if guess < target:
 
-        hint = "📉 Too Low"
+        await update.message.reply_text(
+            "📉 Too low!",
+            reply_markup=back_keyboard(),
+        )
 
-    else:
+        return GUESS_NUMBER
 
-        hint = "📈 Too High"
+    if guess > target:
+
+        await update.message.reply_text(
+            "📈 Too high!",
+            reply_markup=back_keyboard(),
+        )
+
+        return GUESS_NUMBER
 
     await update.message.reply_text(
-        f"{hint}\n\n"
-        f"Attempts: {game['attempts']}/{GAME_MAX_ATTEMPTS}\n"
-        f"Remaining: {remaining}\n\n"
-        "Try again.",
+        f"🎉 Correct!\n\nAttempts: {attempts}",
         reply_markup=back_keyboard(),
     )
 
-    return GUESS_GAME
-    # ==========================================================
-# CONVERSATION HANDLER
-# ==========================================================
+    context.user_data.pop("guess_number", None)
+    context.user_data.pop("attempts", None)
 
-conversation_handler = ConversationHandler(
-
-    entry_points=[
-        CallbackQueryHandler(callback_router),
-    ],
-
-    states={
-
-        FANCY_TEXT: [
-            MessageHandler(
-                filters.TEXT & ~filters.COMMAND,
-                fancy_text_handler,
-            )
-        ],
-
-        PASSWORD_GEN: [
-            MessageHandler(
-                filters.TEXT & ~filters.COMMAND,
-                password_generator_handler,
-            )
-        ],
-
-        PASSWORD_STRENGTH: [
-            MessageHandler(
-                filters.TEXT & ~filters.COMMAND,
-                password_strength_handler,
-            )
-        ],
-
-        SHA256_HASH: [
-            MessageHandler(
-                filters.TEXT & ~filters.COMMAND,
-                sha256_handler,
-            )
-        ],
-
-        BASE64_ENCODE: [
-            MessageHandler(
-                filters.TEXT & ~filters.COMMAND,
-                base64_encode_handler,
-            )
-        ],
-
-        BASE64_DECODE: [
-            MessageHandler(
-                filters.TEXT & ~filters.COMMAND,
-                base64_decode_handler,
-            )
-        ],
-
-        UUID_GEN: [
-            CallbackQueryHandler(
-                uuid_handler,
-                pattern="^uuid$",
-            )
-        ],
-
-        TIMESTAMP: [
-            MessageHandler(
-                filters.TEXT & ~filters.COMMAND,
-                timestamp_handler,
-            )
-        ],
-
-        TO_UPPER: [
-            MessageHandler(
-                filters.TEXT & ~filters.COMMAND,
-                uppercase_handler,
-            )
-        ],
-
-        TO_LOWER: [
-            MessageHandler(
-                filters.TEXT & ~filters.COMMAND,
-                lowercase_handler,
-            )
-        ],
-
-        REVERSE_TEXT: [
-            MessageHandler(
-                filters.TEXT & ~filters.COMMAND,
-                reverse_handler,
-            )
-        ],
-
-        WORD_COUNTER: [
-            MessageHandler(
-                filters.TEXT & ~filters.COMMAND,
-                word_counter_handler,
-            )
-        ],
-
-        RANDOM_NUMBER: [
-            MessageHandler(
-                filters.TEXT & ~filters.COMMAND,
-                random_number_handler,
-            )
-        ],
-
-        COIN_FLIP: [
-            CallbackQueryHandler(
-                coin_flip_handler,
-                pattern="^coin$",
-            )
-        ],
-
-        DICE: [
-            CallbackQueryHandler(
-                dice_handler,
-                pattern="^dice$",
-            )
-        ],
-
-        RANDOM_EMOJI: [
-            CallbackQueryHandler(
-                random_emoji_handler,
-                pattern="^emoji$",
-            )
-        ],
-
-        RANDOM_QUOTE: [
-            CallbackQueryHandler(
-                random_quote_handler,
-                pattern="^quote$",
-            )
-        ],
-
-        GUESS_GAME: [
-            MessageHandler(
-                filters.TEXT & ~filters.COMMAND,
-                guess_game_handler,
-            )
-        ],
-
-    },
-
-    fallbacks=[
-        CommandHandler(
-            "start",
-            start,
-        ),
-
-        CommandHandler(
-            "help",
-            help_command,
-        ),
-
-        CallbackQueryHandler(
-            callback_router,
-        ),
-    ],
-
-    allow_reentry=True,
-
-)
-# ==========================================================
-# ERROR HANDLER
-# ==========================================================
-
-async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
-
-    logger.exception("Exception while handling update:", exc_info=context.error)
-
-    try:
-
-        if isinstance(update, Update):
-
-            target = (
-                update.effective_message
-                or (
-                    update.callback_query.message
-                    if update.callback_query
-                    else None
-                )
-            )
-
-            if target:
-
-                await target.reply_text(
-                    "⚠️ An unexpected error occurred.\nPlease try again."
-                )
-
-    except Exception:
-        pass
-
+    return ConversationHandler.END
 
 # ==========================================================
 # MAIN
@@ -1340,57 +1244,128 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
 
-    logger.info("Starting BB877 Utility Bot...")
+    application = Application.builder().token(BOT_TOKEN).build()
 
-    application = (
-        Application.builder()
-        .token(BOT_TOKEN)
-        .build()
+    conv_handler = ConversationHandler(
+
+        entry_points=[
+            CallbackQueryHandler(callback_router),
+        ],
+
+        states={
+
+            PASSWORD_GENERATOR: [
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND,
+                    password_generator,
+                )
+            ],
+
+            PASSWORD_STRENGTH: [
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND,
+                    password_strength,
+                )
+            ],
+
+            SHA256_HASH: [
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND,
+                    sha256_handler,
+                )
+            ],
+
+            BASE64_ENCODE: [
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND,
+                    base64_encode_handler,
+                )
+            ],
+
+            BASE64_DECODE: [
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND,
+                    base64_decode_handler,
+                )
+            ],
+
+            TIMESTAMP: [
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND,
+                    timestamp_handler,
+                )
+            ],
+
+            TEXT_UPPER: [
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND,
+                    uppercase_handler,
+                )
+            ],
+
+            TEXT_LOWER: [
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND,
+                    lowercase_handler,
+                )
+            ],
+
+            TEXT_REVERSE: [
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND,
+                    reverse_text_handler,
+                )
+            ],
+
+            WORD_COUNTER: [
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND,
+                    word_counter_handler,
+                )
+            ],
+
+            RANDOM_NUMBER: [
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND,
+                    random_number_handler,
+                )
+            ],
+
+            GUESS_NUMBER: [
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND,
+                    guess_number_handler,
+                )
+            ],
+
+            FANCY_TEXT: [
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND,
+                    fancy_text_handler,
+                )
+            ],
+
+        },
+
+        fallbacks=[
+            CommandHandler("start", start),
+        ],
+
+        allow_reentry=True,
     )
 
-    # Commands
-    application.add_handler(
-        CommandHandler(
-            "start",
-            start,
-        )
-    )
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("about", about))
 
-    application.add_handler(
-        CommandHandler(
-            "help",
-            help_command,
-        )
-    )
+    application.add_handler(conv_handler)
 
-    application.add_handler(
-        CommandHandler(
-            "about",
-            about,
-        )
-    )
+    application.run_polling()
 
-    # Conversation
-    application.add_handler(conversation_handler)
 
-    # Callback router (fallback for menu buttons)
-    application.add_handler(
-        CallbackQueryHandler(
-            callback_router
-        )
-    )
-
-    # Error handler
-    application.add_error_handler(error_handler)
-
-    logger.info("Bot is running...")
-
-    application.run_polling(
-        allowed_updates=Update.ALL_TYPES,
-        drop_pending_updates=True,
-    )
-
+# ==========================================================
+# START BOT
+# ==========================================================
 
 if __name__ == "__main__":
     main()
-    
