@@ -142,17 +142,9 @@ def main_menu():
 
 
 def back_keyboard():
-
-    return InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton(
-                    "⬅ Back",
-                    callback_data="back",
-                )
-            ]
-        ]
-    )
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("⬅️ Back", callback_data="home")]
+    ])
 
 # ==========================================================
 # START
@@ -272,12 +264,13 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = query.data
 
-    if data == "home":
-        await query.edit_message_text(
-            "🏠 BB877 Utility Bot",
-            reply_markup=main_menu(),
-        )
-        return ConversationHandler.END
+   if data == "home":
+    await query.edit_message_text(
+        "🏠 *BB877 Utility Bot*\n\nChoose a tool:",
+        parse_mode="Markdown",
+        reply_markup=main_menu(),
+    )
+    return ConversationHandler.END
 
     elif data == "fancy":
         await query.edit_message_text(
