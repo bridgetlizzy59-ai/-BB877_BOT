@@ -940,15 +940,52 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 
-    text = (
+   text = (
+    "👋 *Welcome to BB877 Utility Bot*\n\n"
 
-        "👋 *Welcome to BB877 Utility Bot*\n\n"
+    "A production-grade multi-purpose Telegram Utility Bot.\n\n"
 
-        "A production-grade Telegram Utility Bot.\n\n"
+    "*Available Features*\n\n"
 
-        "Choose a category below."
+    "✨ *Fancy Text*\n"
+    "• Stylish Unicode Text Converter\n\n"
 
-    )
+    "🔐 *Password Tools*\n"
+    "• Password Generator\n"
+    "• Password Strength Checker\n\n"
+
+    "🔒 *Encoding & Hashing*\n"
+    "• SHA-256\n"
+    "• SHA-1\n"
+    "• SHA-512\n"
+    "• MD5\n"
+    "• Base64 Encode\n"
+    "• Base64 Decode\n"
+    "• UUID Generator\n"
+    "• Unix Timestamp Converter\n\n"
+
+    "📝 *Text Tools*\n"
+    "• UPPERCASE\n"
+    "• lowercase\n"
+    "• Title Case\n"
+    "• Reverse Text\n"
+    "• Word Counter\n"
+    "• Character Counter\n"
+    "• Remove Extra Spaces\n"
+    "• Remove Duplicate Lines\n\n"
+
+    "🎲 *Random Tools*\n"
+    "• Random Number\n"
+    "• Coin Flip\n"
+    "• Dice Roll\n"
+    "• Random Emoji\n"
+    "• Random Quote\n\n"
+
+    "🎮 *Mini Game*\n"
+    "• Guess the Number\n\n"
+
+    "👇 Select a category below."
+)
 
 
 
