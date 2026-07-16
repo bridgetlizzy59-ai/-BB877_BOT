@@ -929,100 +929,73 @@ async def show_random_menu(query):
 
 
 # ==========================================================
-
 # START
-
 # ==========================================================
-
-
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
+    text = (
+        "👋 *Welcome to BB877 Utility Bot*\n\n"
 
+        "A production-grade multi-purpose Telegram utility bot.\n\n"
 
-   text = (
-    "👋 *Welcome to BB877 Utility Bot*\n\n"
+        "*Features:*\n\n"
 
-    "A production-grade multi-purpose Telegram Utility Bot.\n\n"
+        "✨ Fancy Text\n\n"
 
-    "*Available Features*\n\n"
+        "🔐 Password Tools\n"
+        "• Password Generator\n"
+        "• Password Strength Checker\n\n"
 
-    "✨ *Fancy Text*\n"
-    "• Stylish Unicode Text Converter\n\n"
+        "🔒 Encoding & Hashing\n"
+        "• SHA-256\n"
+        "• SHA-1\n"
+        "• SHA-512\n"
+        "• MD5\n"
+        "• Base64 Encode\n"
+        "• Base64 Decode\n"
+        "• UUID Generator\n"
+        "• Timestamp Converter\n\n"
 
-    "🔐 *Password Tools*\n"
-    "• Password Generator\n"
-    "• Password Strength Checker\n\n"
+        "📝 Text Tools\n"
+        "• UPPERCASE\n"
+        "• lowercase\n"
+        "• Title Case\n"
+        "• Reverse Text\n"
+        "• Word Counter\n"
+        "• Character Counter\n"
+        "• Remove Extra Spaces\n"
+        "• Remove Duplicate Lines\n\n"
 
-    "🔒 *Encoding & Hashing*\n"
-    "• SHA-256\n"
-    "• SHA-1\n"
-    "• SHA-512\n"
-    "• MD5\n"
-    "• Base64 Encode\n"
-    "• Base64 Decode\n"
-    "• UUID Generator\n"
-    "• Unix Timestamp Converter\n\n"
+        "🎲 Random Tools\n"
+        "• Random Number\n"
+        "• Coin Flip\n"
+        "• Dice Roll\n"
+        "• Random Emoji\n"
+        "• Random Quote\n\n"
 
-    "📝 *Text Tools*\n"
-    "• UPPERCASE\n"
-    "• lowercase\n"
-    "• Title Case\n"
-    "• Reverse Text\n"
-    "• Word Counter\n"
-    "• Character Counter\n"
-    "• Remove Extra Spaces\n"
-    "• Remove Duplicate Lines\n\n"
+        "🎮 Guess Number Game\n\n"
 
-    "🎲 *Random Tools*\n"
-    "• Random Number\n"
-    "• Coin Flip\n"
-    "• Dice Roll\n"
-    "• Random Emoji\n"
-    "• Random Quote\n\n"
-
-    "🎮 *Mini Game*\n"
-    "• Guess the Number\n\n"
-
-    "👇 Select a category below."
-)
-
-
+        "Choose a category below."
+    )
 
     if update.callback_query:
 
-
-
         await update.callback_query.edit_message_text(
-
             text=text,
-
             parse_mode=ParseMode.MARKDOWN,
-
             reply_markup=main_menu(),
-
         )
-
-
 
     else:
 
-
-
         await update.message.reply_text(
-
             text=text,
-
             parse_mode=ParseMode.MARKDOWN,
-
             reply_markup=main_menu(),
-
         )
 
-
-
     return ConversationHandler.END
-
 
 
 
